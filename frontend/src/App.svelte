@@ -4,7 +4,7 @@
   let statuses = {};
   let newUser = "";
   onMount(async () => {
-    const response = await fetch("/get");
+    const response = await fetch(`/get?t=${Date.now()}`);
     if (response.ok) {
       balances = await response.json();
     }
