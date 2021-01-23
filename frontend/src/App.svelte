@@ -1,32 +1,46 @@
 <script>
   import { onMount } from "svelte";
-  let balances = {};
-  let statuses = {};
-  let newUser = "";
-  onMount(async () => {
+
+  const get = async () => {
     const response = await fetch(`/get?t=${Date.now()}`);
-    if (response.ok) {
-      balances = await response.json();
-    }
-  });
-  const statusClasses = [
-    "status-not-involved",
-    "status-ordered",
-    "status-went-down"
-  ];
+    if (!response.ok) return {};
+    return await response.json();
+  };
+
   const put = () => {
     fetch("/put", {
       method: "POST",
       "Content-Type": "application/json",
-      body: JSON.stringify(balances)
+      body: JSON.stringify(balances),
     });
   };
-  const commit = () => {
+
+  const status = {
+    WASNT_INVOLVED: "wasnt_involved",
+    ORDERED: "ordered",
+    WENT_DOWN: "went_down",
+  };
+
+  let balances = {};
+  let statuses = {};
+  onMount(async () => {
+    balances = await get();
+  });
+
+  let newUser = "";
+  const newUserAdd = () => {
+    if (!newUser) return;
+    balances[newUser] = 0;
+    newUser = "";
+    put();
+  };
+
+  const calculate = () => {
     let ordereds = 0;
     let wentDowns = 0;
     for (const name in balances) {
-      if (statuses[name] === 1) ordereds++;
-      if (statuses[name] === 2) wentDowns++;
+      if (statuses[name] === status.ORDERED) ordereds++;
+      if (statuses[name] === status.WENT_DOWN) wentDowns++;
     }
     if (
       (ordereds === 0 && wentDowns === 0) ||
@@ -36,90 +50,84 @@
       return;
     }
     for (const [name, balance] of Object.entries(balances)) {
-      if (statuses[name] === 2) balances[name] += 1 / wentDowns;
-      if (statuses[name] === 1) balances[name] -= 1 / ordereds;
+      if (statuses[name] === status.WENT_DOWN) balances[name] += 1 / wentDowns;
+      if (statuses[name] === status.ORDERED) balances[name] -= 1 / ordereds;
       statuses[name] = 0;
     }
-    put();
   };
-  const newUserAdd = () => {
-    balances[newUser] = 0;
-    newUser = "";
+
+  const commit = () => {
+    calculate();
     put();
   };
 </script>
 
-<style>
-  table {
-    table-layout: fixed;
-    border-collapse: collapse;
-    width: 100%;
+<div class="bg-gray-300 min-h-screen flex items-center justify-center">
+  <div class="flex flex-col gap-8 p-2">
+    {#if Object.keys(balances).length}
+      <div
+        class="block bg-gray-50 p-4 grid grid-cols-3 items-center gap-y-2 gap-x-4"
+      >
+        <div class="font-bold">name</div>
+        <div class="font-bold text-right">balance</div>
+        <div class="font-bold">action</div>
+        {#each Object.entries(balances) as [name, balance]}
+          <div class="truncate">{name}</div>
+          <div class="text-right font-mono">{balance.toFixed(2)}</div>
+          <!-- svelte-ignore a11y-no-onchange -->
+          <select
+            class="inp pr-8 border-gray-300"
+            value={statuses[name] || status.WASNT_INVOLVED}
+            on:change={(e) => {
+              statuses[name] = e.target.value;
+            }}
+            class:bg-green-200={statuses[name] === status.ORDERED}
+            class:bg-yellow-200={statuses[name] === status.WENT_DOWN}
+          >
+            <option value={status.WASNT_INVOLVED}>wasn't involved</option>
+            <option value={status.ORDERED}>ordered</option>
+            <option value={status.WENT_DOWN}>went down</option>
+          </select>
+        {/each}
+        <button
+          class="inp col-span-full bg-blue-400 text-white"
+          on:click={commit}
+        >
+          commit
+        </button>
+      </div>
+    {/if}
+    <div class="block bg-gray-50 flex flex-col gap-2">
+      <input
+        class="inp border-gray-300"
+        type="text"
+        placeholder="Robert Wyatt"
+        bind:value={newUser}
+      />
+      <button class="inp bg-blue-400 text-white" on:click={newUserAdd}>
+        add new user
+      </button>
+    </div>
+  </div>
+</div>
+
+<style global>
+  @tailwind base;
+  @tailwind components;
+  @tailwind utilities;
+
+  @layer base {
+    body {
+      @apply m-0 p-0;
+    }
   }
-  th {
-    text-align: left;
-  }
-  select,
-  input,
-  button {
-    background-color: rgba(0, 0, 0, 0.2);
-    border: 1px solid #aaa;
-    box-sizing: border-box;
-    height: 18px;
-    margin: 2px 0;
-    vertical-align: top;
-    width: 100%;
-  }
-  button,
-  input {
-    background-color: white;
-  }
-  .status-not-involved td {
-    background-color: white;
-  }
-  .status-ordered td {
-    background-color: #ffbd45;
-  }
-  .status-went-down td {
-    background-color: #aee571;
+
+  @layer components {
+    .inp {
+      @apply rounded m-0 p-0 px-2;
+    }
+    .block {
+      @apply p-4 rounded-lg shadow-lg;
+    }
   }
 </style>
-
-<table>
-  {#if Object.keys(balances).length}
-    <tr>
-      <th>name</th>
-      <th>balance</th>
-      <th>action</th>
-    </tr>
-    {#each Object.entries(balances) as [name, balance]}
-      <tr class={statusClasses[statuses[name] || 0]}>
-        <td>{name}</td>
-        <td>{balance.toFixed(2)}</td>
-        <td>
-          <select
-            value={(statuses[name] || 0).toString()}
-            on:change={e => (statuses[name] = Number(e.target.value))}
-          >
-            <option value="0">wasn't involved</option>
-            <option value="1">ordered</option>
-            <option value="2">went down</option>
-          </select>
-        </td>
-      </tr>
-    {/each}
-    <tr>
-      <td colspan="2" />
-      <td>
-        <button type="button" on:click={commit}>commit</button>
-      </td>
-    </tr>
-  {/if}
-  <tr>
-    <td colspan="2">
-      <input bind:value={newUser} placeholder="add a new user" />
-    </td>
-    <td>
-      <button on:click={newUserAdd}>create</button>
-    </td>
-  </tr>
-</table>

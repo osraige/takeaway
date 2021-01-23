@@ -1,25 +1,34 @@
 import svelte from "rollup-plugin-svelte";
-import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
+import resolve from "@rollup/plugin-node-resolve";
 import livereload from "rollup-plugin-livereload";
 import { terser } from "rollup-plugin-terser";
+import css from "rollup-plugin-css-only";
+import sveltePreprocess from "svelte-preprocess";
 
 const production = !process.env.ROLLUP_WATCH;
 
-const serve = () => {
-  let started = false;
+function serve() {
+  let server;
+  function toExit() {
+    if (server) server.kill(0);
+  }
   return {
     writeBundle() {
-      if (!started) {
-        started = true;
-        require("child_process").spawn("npm", ["run", "start", "--", "--dev"], {
+      if (server) return;
+      server = require("child_process").spawn(
+        "npm",
+        ["run", "start", "--", "--dev"],
+        {
           stdio: ["ignore", "inherit", "inherit"],
-          shell: true
-        });
-      }
-    }
+          shell: true,
+        }
+      );
+      process.on("SIGTERM", toExit);
+      process.on("exit", toExit);
+    },
   };
-};
+}
 
 export default {
   input: "src/main.js",
@@ -27,26 +36,26 @@ export default {
     sourcemap: true,
     format: "iife",
     name: "app",
-    file: "public/build/bundle.js"
+    file: "public/build/bundle.js",
   },
   plugins: [
     svelte({
-      dev: !production,
-      css: css => {
-        css.write("public/build/bundle.css");
-      }
+      preprocess: sveltePreprocess({ postcss: true }),
+      compilerOptions: {
+        dev: !production,
+      },
     }),
+    css({ output: "bundle.css" }),
     resolve({
       browser: true,
-      dedupe: importee =>
-        importee === "svelte" || importee.startsWith("svelte/")
+      dedupe: ["svelte"],
     }),
     commonjs(),
     !production && serve(),
     !production && livereload("public"),
-    production && terser()
+    production && terser(),
   ],
   watch: {
-    clearScreen: false
-  }
+    clearScreen: false,
+  },
 };
