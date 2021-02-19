@@ -22,8 +22,8 @@
     on:change={e => {
       dispatch('select', { name, status: e.target.value })
     }}
-    class:bg-green-200={statuses[name] === status.ORDERED}
-    class:bg-yellow-200={statuses[name] === status.WENT_DOWN}
+    class:bg-yellow-200={statuses[name] === status.ORDERED}
+    class:bg-green-200={statuses[name] === status.WENT_DOWN}
   >
     <option value={status.WASNT_INVOLVED}>wasn't involved</option>
     <option value={status.ORDERED}>ordered</option>
